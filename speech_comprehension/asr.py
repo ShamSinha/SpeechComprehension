@@ -51,9 +51,13 @@ class WhisperBackend:
 
         self.model = whisper.load_model(model_name)
         self.language = language
+        self.fp16 = _whisper_supports_fp16(self.model)
 
     def transcribe(self, audio_path: str | Path) -> ASRResult:
-        options: dict[str, object] = {"word_timestamps": True}
+        options: dict[str, object] = {
+            "word_timestamps": True,
+            "fp16": self.fp16,
+        }
         if self.language:
             options["language"] = self.language
         raw = self.model.transcribe(str(audio_path), **options)
@@ -169,3 +173,8 @@ def _avg_logprob_to_confidence(avg_logprob: object) -> float:
         return max(0.0, min(1.0, math.exp(float(avg_logprob))))
     except (TypeError, ValueError, OverflowError):
         return 0.5
+
+
+def _whisper_supports_fp16(model: object) -> bool:
+    device = getattr(model, "device", None)
+    return getattr(device, "type", None) == "cuda"
