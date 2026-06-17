@@ -26,10 +26,33 @@ def test_common_voice_manifest_rows_from_tsv(tmp_path: Path) -> None:
 
     assert len(rows) == 1
     assert rows[0].audio == str(clips / "sample.wav")
+    assert rows[0].id == "validated_sample"
     assert rows[0].transcript == "The world is changing."
     assert rows[0].accent == "India"
     assert rows[0].speaker == "speaker-1"
     assert rows[0].source == "common-voice"
+
+
+def test_common_voice_all_valid_combines_kaggle_csv_splits(tmp_path: Path) -> None:
+    root = tmp_path / "common_voice"
+    for split in ["cv-valid-train", "cv-valid-dev", "cv-valid-test"]:
+        audio_dir = root / split / split
+        audio_dir.mkdir(parents=True)
+        (audio_dir / "sample.mp3").write_bytes(b"fake mp3")
+        (root / f"{split}.csv").write_text(
+            "filename,text,accent\n"
+            f"{split}/sample.mp3,hello from {split},india\n",
+            encoding="utf-8",
+        )
+
+    rows = common_voice_rows(root, split="all-valid")
+
+    assert [row.split for row in rows] == [
+        "cv-valid-dev",
+        "cv-valid-test",
+        "cv-valid-train",
+    ]
+    assert all(row.audio.endswith("sample.mp3") for row in rows)
 
 
 def test_l2_arctic_manifest_rows_from_txt_done_data(tmp_path: Path) -> None:
@@ -73,7 +96,9 @@ def test_write_manifest_uses_experiment_columns(tmp_path: Path) -> None:
             "source",
             "split",
         ]
-        assert list(reader)[0]["transcript"] == "The world is changing."
+        row = list(reader)[0]
+    assert row["id"] == "validated_sample"
+    assert row["transcript"] == "The world is changing."
 
 
 def _common_voice_fixture(tmp_path: Path) -> Path:

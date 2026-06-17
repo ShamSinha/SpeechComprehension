@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import subprocess
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,12 +34,43 @@ class AudioSignal:
 
 def read_wav(path: str | Path) -> AudioSignal:
     path = Path(path)
+    if path.suffix.lower() != ".wav":
+        return _read_with_ffmpeg(path)
+
     with wave.open(str(path), "rb") as wav:
         channels = wav.getnchannels()
         sample_width = wav.getsampwidth()
         sample_rate = wav.getframerate()
         frames = wav.readframes(wav.getnframes())
 
+    return AudioSignal(_pcm_to_float(frames, sample_width, channels), sample_rate)
+
+
+def _read_with_ffmpeg(path: Path) -> AudioSignal:
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(path),
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-f",
+        "wav",
+        "-",
+    ]
+    completed = subprocess.run(command, check=True, stdout=subprocess.PIPE)
+    with wave.open(io.BytesIO(completed.stdout), "rb") as wav:
+        sample_width = wav.getsampwidth()
+        sample_rate = wav.getframerate()
+        frames = wav.readframes(wav.getnframes())
+    return AudioSignal(_pcm_to_float(frames, sample_width, channels=1), sample_rate)
+
+
+def _pcm_to_float(frames: bytes, sample_width: int, channels: int) -> np.ndarray:
     if sample_width == 1:
         raw = np.frombuffer(frames, dtype=np.uint8).astype(np.float32)
         audio = (raw - 128.0) / 128.0
@@ -62,7 +95,7 @@ def read_wav(path: str | Path) -> AudioSignal:
     if channels > 1:
         audio = audio.reshape(-1, channels).mean(axis=1)
 
-    return AudioSignal(audio, sample_rate)
+    return audio
 
 
 def write_wav(path: str | Path, signal: AudioSignal) -> None:

@@ -47,7 +47,10 @@ speech-build-manifest \
   --output manifests/common_voice_cv_valid_train_100_mp3.csv
 ```
 
-Convert that manifest to mono 16 kHz WAV:
+The repair pipeline can read MP3 files directly through `ffmpeg`, so full-dataset
+runs should use the MP3 manifest. This avoids duplicating a large dataset as WAV.
+
+For a small WAV smoke test, convert a small manifest to mono 16 kHz WAV:
 
 ```bash
 speech-convert-manifest-audio \
@@ -64,6 +67,25 @@ speech-repair-experiment manifests/common_voice_cv_valid_train_100_wav.csv \
   --asr whisper \
   --model small
 ```
+
+For all validated Common Voice splits from the Kaggle layout:
+
+```bash
+speech-build-manifest \
+  --dataset common-voice \
+  --root ../common-voice \
+  --split all-valid \
+  --output manifests/common_voice_all_valid_mp3.csv
+
+speech-repair-experiment manifests/common_voice_all_valid_mp3.csv \
+  --output-dir outputs/common_voice_all_valid \
+  --asr whisper \
+  --model base
+```
+
+For every Common Voice CSV split, including `other` and `invalid`, use
+`--split all`. For research runs, start with `all-valid`; invalid clips are not
+a good first signal for minimal intelligibility repair.
 
 ## L2-ARCTIC
 

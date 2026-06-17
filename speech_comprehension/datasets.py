@@ -56,7 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     common_voice.add_argument(
         "--split",
         default="validated",
-        help="Common Voice TSV split name, such as validated, train, dev, or test",
+        help=(
+            "Common Voice metadata split, such as validated, cv-valid-train, "
+            "all-valid, or all"
+        ),
     )
     common_voice.add_argument(
         "--audio-root",
@@ -119,45 +122,46 @@ def common_voice_rows(
     max_rows: int | None = None,
 ) -> list[ManifestRow]:
     root = root.expanduser().resolve()
-    metadata_path = _find_common_voice_metadata(root, split)
-    resolved_audio_root = (
-        audio_root.expanduser().resolve()
-        if audio_root
-        else _find_common_voice_audio_root(metadata_path, root, split)
-    )
     rows: list[ManifestRow] = []
 
-    with metadata_path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter=_csv_delimiter(metadata_path))
-        for raw in reader:
-            clip_path = _first_present(raw, ["path", "filename", "file", "audio"])
-            transcript = _first_present(raw, ["sentence", "text", "transcript"])
-            if not clip_path or not transcript:
-                continue
+    for metadata_path in _find_common_voice_metadata_paths(root, split):
+        split_name = metadata_path.stem
+        resolved_audio_root = (
+            audio_root.expanduser().resolve()
+            if audio_root
+            else _find_common_voice_audio_root(metadata_path, root, split_name)
+        )
+        with metadata_path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter=_csv_delimiter(metadata_path))
+            for raw in reader:
+                clip_path = _first_present(raw, ["path", "filename", "file", "audio"])
+                transcript = _first_present(raw, ["sentence", "text", "transcript"])
+                if not clip_path or not transcript:
+                    continue
 
-            audio_path = _common_voice_audio_path(
-                root,
-                resolved_audio_root,
-                clip_path,
-                audio_extension=audio_extension,
-            )
-            accent = _first_present(raw, ["accent", "locale", "variant"])
-            if not _matches_filter(accent, accent_contains):
-                continue
-
-            rows.append(
-                ManifestRow(
-                    id=_safe_id(Path(clip_path).stem),
-                    audio=str(audio_path),
-                    transcript=transcript,
-                    accent=accent,
-                    speaker=raw.get("client_id", "").strip(),
-                    source="common-voice",
-                    split=split,
+                audio_path = _common_voice_audio_path(
+                    root,
+                    resolved_audio_root,
+                    clip_path,
+                    audio_extension=audio_extension,
                 )
-            )
-            if max_rows is not None and len(rows) >= max_rows:
-                break
+                accent = _first_present(raw, ["accent", "locale", "variant"])
+                if not _matches_filter(accent, accent_contains):
+                    continue
+
+                rows.append(
+                    ManifestRow(
+                        id=_safe_id(f"{split_name}_{Path(clip_path).stem}"),
+                        audio=str(audio_path),
+                        transcript=transcript,
+                        accent=accent,
+                        speaker=raw.get("client_id", "").strip(),
+                        source="common-voice",
+                        split=split_name,
+                    )
+                )
+                if max_rows is not None and len(rows) >= max_rows:
+                    return rows
 
     return rows
 
@@ -209,6 +213,36 @@ def write_manifest(path: Path, rows: list[ManifestRow]) -> None:
         writer = csv.DictWriter(handle, fieldnames=MANIFEST_FIELDS)
         writer.writeheader()
         writer.writerows(row.to_csv_row() for row in rows)
+
+
+def _find_common_voice_metadata_paths(root: Path, split: str) -> list[Path]:
+    normalized = split.lower()
+    if normalized in {"all-valid", "valid-all"}:
+        matches = _metadata_glob(root, "cv-valid-*") or [
+            path
+            for name in ["validated", "train", "dev", "test"]
+            for path in _metadata_glob(root, name)
+        ]
+        if matches:
+            return matches
+    elif normalized == "all":
+        matches = sorted(
+            path
+            for path in root.glob("*")
+            if path.suffix.lower() in {".csv", ".tsv"}
+        )
+        if matches:
+            return matches
+
+    return [_find_common_voice_metadata(root, split)]
+
+
+def _metadata_glob(root: Path, stem_pattern: str) -> list[Path]:
+    return sorted(
+        path
+        for suffix in [".csv", ".tsv"]
+        for path in root.glob(f"{stem_pattern}{suffix}")
+    )
 
 
 def _find_common_voice_metadata(root: Path, split: str) -> Path:
