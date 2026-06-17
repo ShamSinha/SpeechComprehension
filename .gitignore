@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+outputs/
+data/converted/
+manifests/*.csv
+*.wav.tmp
+repair_report.json

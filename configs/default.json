@@ -1,0 +1,12 @@
+{
+  "confidence_threshold": 0.72,
+  "min_confidence_gain": 0.02,
+  "edit_lambda": 0.35,
+  "wer_penalty": 0.25,
+  "max_edit_ratio": 0.08,
+  "transcript_similarity_floor": 0.96,
+  "span_padding_seconds": 0.045,
+  "min_span_seconds": 0.1,
+  "max_span_seconds": 1.2,
+  "max_spans": 24
+}

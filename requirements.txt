@@ -1,0 +1,3 @@
+numpy>=1.23
+openai-whisper>=20231117
+pytest>=7.4

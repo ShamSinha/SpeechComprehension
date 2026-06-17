@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "speech-comprehension"
+version = "0.1.0"
+description = "Minimal intelligibility repair for accented speech using ASR confidence and edit-cost constraints."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+whisper = ["openai-whisper>=20231117"]
+faster-whisper = ["faster-whisper>=1.0.0"]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+speech-repair = "speech_comprehension.cli:main"
+speech-repair-experiment = "speech_comprehension.experiment:main"
+speech-build-manifest = "speech_comprehension.datasets:main"
+speech-convert-manifest-audio = "speech_comprehension.prepare_audio:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["speech_comprehension*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
