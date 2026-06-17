@@ -33,7 +33,13 @@ The SoundStream path currently uses the third-party `audiolm-pytorch` package:
 
 ```python
 from audiolm_pytorch import SoundStream
+soundstream = SoundStream(target_sample_hz=16000, codebook_size=1024)
 ```
+
+`audiolm-pytorch` also exposes AudioLM-style semantic-token components such as
+`HubertWithKmeans`. Those are useful as conditioning signals, but the editable
+representation should remain codec/acoustic latents because they can be decoded
+back to audio.
 
 ## Why Codec Latents
 

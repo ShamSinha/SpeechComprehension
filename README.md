@@ -56,6 +56,7 @@ Codec options:
 ```bash
 pip install -e ".[codec]"       # EnCodec
 pip install -e ".[soundstream]" # audiolm-pytorch SoundStream
+pip install -e ".[logging]"     # optional TensorBoard logs
 ```
 
 Verify:
@@ -249,7 +250,16 @@ SoundStream through `audiolm-pytorch`:
 
 ```python
 from audiolm_pytorch import SoundStream
-model = SoundStream(target_sample_hz=16000)
+model = SoundStream(target_sample_hz=16000, codebook_size=1024)
+```
+
+The upstream `audiolm-pytorch` path has pretrained EnCodec support, but its
+native SoundStream path expects you to train SoundStream or load a checkpoint:
+
+```python
+from audiolm_pytorch import SoundStream
+
+soundstream = SoundStream.init_and_load_from("runs/soundstream/soundstream.100000.pt")
 ```
 
 These packages are installed as optional dependencies. The actual codec dataset
@@ -263,6 +273,101 @@ manifest audio
 -> freeze listener proxy
 -> train latent editor
 ```
+
+## Train A SoundStream Codec
+
+SoundStream gives acoustic codec tokens: compact reconstructable audio tokens
+that preserve speaker, timing, prosody, and local pronunciation detail. A fresh
+`audiolm-pytorch` SoundStream is randomly initialized, so train or load a codec
+before treating its tokens as meaningful.
+
+Train on the Common Voice valid-train audio folder:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python -m speech_comprehension.train_soundstream \
+  --folder ../common-voice/cv-valid-train/cv-valid-train \
+  --results-folder runs/soundstream_common_voice_valid_train \
+  --num-train-steps 100000 \
+  --batch-size 4 \
+  --grad-accum-every 4 \
+  --data-max-length-seconds 3 \
+  --codebook-size 1024 \
+  --rq-num-quantizers 8 \
+  --mixed-precision fp16 \
+  --tensorboard
+```
+
+For a smaller smoke test:
+
+```bash
+.venv/bin/python -m speech_comprehension.train_soundstream \
+  --folder ../common-voice/cv-valid-train/cv-valid-train \
+  --results-folder runs/soundstream_smoke \
+  --num-train-steps 20 \
+  --batch-size 1 \
+  --data-max-length-seconds 1
+```
+
+To resume or fine-tune an existing SoundStream checkpoint:
+
+```bash
+.venv/bin/python -m speech_comprehension.train_soundstream \
+  --folder ../common-voice/cv-valid-train/cv-valid-train \
+  --soundstream-checkpoint runs/soundstream_common_voice_valid_train/soundstream.100000.pt \
+  --results-folder runs/soundstream_finetune \
+  --num-train-steps 10000
+```
+
+Each training run writes Lightning-style local logs:
+
+```text
+runs/.../logs/version_N/hparams.json
+runs/.../logs/version_N/metrics.jsonl
+runs/.../logs/version_N/metrics.csv
+runs/.../logs/version_N/tensorboard/   # when --tensorboard is enabled
+```
+
+Open TensorBoard with:
+
+```bash
+.venv/bin/tensorboard --logdir runs
+```
+
+This trains the codec only. The intelligibility-repair model still needs the
+next stages:
+
+```text
+trained/frozen SoundStream
+-> acoustic tokens or latents z
+-> ASR confidence / WER labels
+-> listener proxy
+-> sparse latent editor
+-> SoundStream decode
+```
+
+## Acoustic vs Semantic Tokens
+
+For this project, acoustic tokens are required because they can be decoded back
+to audio. SoundStream tokens are acoustic tokens.
+
+Semantic tokens are still useful, but as conditioning or supervision. In
+`audiolm-pytorch`, semantic tokens usually come from:
+
+```python
+from audiolm_pytorch import HubertWithKmeans
+
+semantic_tokenizer = HubertWithKmeans(
+    checkpoint_path="checkpoints/hubert_base_ls960.pt",
+    kmeans_path="checkpoints/hubert_base_ls960_L9_km500.bin",
+    target_sample_hz=16000,
+)
+```
+
+They represent content/phonetic structure more than waveform detail. They can
+help the editor decide where a pronunciation is confusing, but they should not
+replace SoundStream for reconstruction. The safest MVP is not full AudioLM
+generation; it is sparse editing of original acoustic tokens, optionally
+conditioned on semantic tokens.
 
 ## Report Shape
 

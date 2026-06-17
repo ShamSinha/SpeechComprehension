@@ -18,6 +18,7 @@ faster-whisper = ["faster-whisper>=1.0.0"]
 train = ["torch>=2.0"]
 codec = ["encodec>=0.1.1"]
 soundstream = ["audiolm-pytorch>=2.4.0"]
+logging = ["tensorboard>=2.14"]
 dev = ["pytest>=7.4"]
 
 [project.scripts]
@@ -25,6 +26,7 @@ speech-repair = "speech_comprehension.cli:main"
 speech-repair-experiment = "speech_comprehension.experiment:main"
 speech-build-manifest = "speech_comprehension.datasets:main"
 speech-convert-manifest-audio = "speech_comprehension.prepare_audio:main"
+speech-train-soundstream = "speech_comprehension.train_soundstream:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
