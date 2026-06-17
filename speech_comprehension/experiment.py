@@ -145,7 +145,13 @@ def _resolve_manifest_path(manifest_path: Path, value: str) -> Path:
     path = Path(value).expanduser()
     if path.is_absolute():
         return path
-    return manifest_path.parent / path
+    manifest_relative = manifest_path.parent / path
+    if manifest_relative.exists():
+        return manifest_relative
+    cwd_relative = Path.cwd() / path
+    if cwd_relative.exists():
+        return cwd_relative
+    return manifest_relative
 
 
 def _sample_id(row: dict[str, str], id_column: str, audio_path: Path, index: int) -> str:

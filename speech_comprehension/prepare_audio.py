@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -79,7 +80,7 @@ def convert_manifest_audio(
             _run_ffmpeg(ffmpeg, source, destination, sample_rate, overwrite=overwrite)
 
         converted = dict(row)
-        converted[audio_column] = str(destination)
+        converted[audio_column] = _manifest_relative_path(output_manifest, destination)
         output_rows.append(converted)
 
     _write_rows(output_manifest, fieldnames, output_rows)
@@ -114,7 +115,17 @@ def _resolve_manifest_path(manifest_path: Path, value: str) -> Path:
     path = Path(value).expanduser()
     if path.is_absolute():
         return path
-    return manifest_path.parent / path
+    manifest_relative = manifest_path.parent / path
+    if manifest_relative.exists():
+        return manifest_relative
+    cwd_relative = Path.cwd() / path
+    if cwd_relative.exists():
+        return cwd_relative
+    return manifest_relative
+
+
+def _manifest_relative_path(manifest_path: Path, audio_path: Path) -> str:
+    return os.path.relpath(audio_path.resolve(), manifest_path.parent.resolve())
 
 
 def _sample_id(row: dict[str, str], id_column: str, audio_path: Path, index: int) -> str:
