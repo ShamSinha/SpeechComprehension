@@ -17,6 +17,7 @@ whisper = ["openai-whisper>=20231117"]
 faster-whisper = ["faster-whisper>=1.0.0"]
 train = ["torch>=2.0"]
 codec = ["encodec>=0.1.1"]
+soundstream = ["audiolm-pytorch>=2.4.0"]
 dev = ["pytest>=7.4"]
 
 [project.scripts]

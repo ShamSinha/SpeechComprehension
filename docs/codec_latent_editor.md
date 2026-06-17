@@ -22,6 +22,19 @@ audio
 
 Examples of suitable codecs include EnCodec and SoundStream-style models.
 
+Install codec backends with:
+
+```bash
+pip install -e ".[codec]"
+pip install -e ".[soundstream]"
+```
+
+The SoundStream path currently uses the third-party `audiolm-pytorch` package:
+
+```python
+from audiolm_pytorch import SoundStream
+```
+
 ## Why Codec Latents
 
 Codec latents are editable in a way waveforms are not. A one-second waveform at
