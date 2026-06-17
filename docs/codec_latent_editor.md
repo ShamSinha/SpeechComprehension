@@ -20,7 +20,9 @@ audio
 -> edited audio
 ```
 
-Examples of suitable codecs include EnCodec and SoundStream-style models.
+Use pretrained EnCodec first. It gives us acoustic tokens immediately, without
+spending time training a codec from scratch. SoundStream stays as a later option
+if we need a codec trained specifically on our data.
 
 Install codec backends with:
 
@@ -29,7 +31,25 @@ pip install -e ".[codec]"
 pip install -e ".[soundstream]"
 ```
 
-The SoundStream path currently uses the third-party `audiolm-pytorch` package:
+The current MVP codec path is EnCodec:
+
+```python
+from encodec import EncodecModel
+
+model = EncodecModel.encodec_model_24khz()
+model.set_target_bandwidth(6.0)
+```
+
+Extract acoustic tokens from a manifest:
+
+```bash
+.venv/bin/python -m speech_comprehension.extract_encodec_tokens \
+  manifests/common_voice_cv_valid_train_10_wav.csv \
+  --output-dir data/encodec_tokens/common_voice_cv_valid_train_10 \
+  --bandwidth 6.0
+```
+
+SoundStream through `audiolm-pytorch` is optional/later:
 
 ```python
 from audiolm_pytorch import SoundStream

@@ -10,6 +10,7 @@ build/
 outputs/
 runs/
 data/converted/
+data/encodec_tokens/
 manifests/*.csv
 *.wav.tmp
 repair_report.json

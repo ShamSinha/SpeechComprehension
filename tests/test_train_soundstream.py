@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from speech_comprehension.train_soundstream import (
     LocalTrainingLogger,
     _next_run_dir,
@@ -18,6 +20,7 @@ def test_train_soundstream_parser_defaults() -> None:
     assert args.codebook_size == 1024
     assert args.rq_num_quantizers == 8
     assert args.data_max_length_seconds == 3.0
+    assert args.multi_spectral_recon_loss_weight == 0.0
 
 
 def test_next_run_dir_uses_lightning_style_versions(tmp_path: Path) -> None:
@@ -41,3 +44,12 @@ def test_local_training_logger_writes_hparams_jsonl_and_csv(tmp_path: Path) -> N
     assert '"batch_size": 1' in (run_dir / "hparams.json").read_text(encoding="utf-8")
     assert '"loss": 1.25' in (run_dir / "metrics.jsonl").read_text(encoding="utf-8")
     assert "custom metric" in (run_dir / "metrics.csv").read_text(encoding="utf-8")
+
+
+def test_local_training_logger_stops_on_nonfinite_loss(tmp_path: Path) -> None:
+    logger = LocalTrainingLogger(run_dir=tmp_path / "version_0", hparams={})
+
+    with pytest.raises(FloatingPointError, match="Non-finite SoundStream loss"):
+        logger.log({"loss": float("inf"), "recon_loss": 0.1}, step=5)
+
+    logger.close()

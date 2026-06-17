@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--codebook-size", type=int, default=1024)
     parser.add_argument("--rq-num-quantizers", type=int, default=8)
     parser.add_argument("--channels", type=int, default=32)
+    parser.add_argument(
+        "--multi-spectral-recon-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for audiolm-pytorch's log-mel multi-spectral loss. "
+            "Default is 0.0 because this package can produce inf/nan on silent chunks."
+        ),
+    )
     parser.add_argument(
         "--soundstream-checkpoint",
         type=Path,
@@ -79,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Let the trainer clear an existing results folder before training.",
     )
+    parser.add_argument(
+        "--allow-nonfinite-loss",
+        action="store_true",
+        help="Keep training after nan/inf losses. By default training stops to protect checkpoints.",
+    )
     return parser
 
 
@@ -115,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             codebook_size=args.codebook_size,
             rq_num_quantizers=args.rq_num_quantizers,
             channels=args.channels,
+            multi_spectral_recon_loss_weight=args.multi_spectral_recon_loss_weight,
         )
 
     accelerate_kwargs = {}
@@ -132,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             "cuda_available": torch.cuda.is_available(),
         },
         tensorboard=args.tensorboard,
+        stop_on_nonfinite=not args.allow_nonfinite_loss,
     )
 
     print(f"Training SoundStream codec from: {folder}")
@@ -179,8 +196,10 @@ class LocalTrainingLogger:
         run_dir: Path,
         hparams: dict[str, Any],
         tensorboard: bool = False,
+        stop_on_nonfinite: bool = True,
     ) -> None:
         self.run_dir = run_dir
+        self.stop_on_nonfinite = stop_on_nonfinite
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.started_at = time.time()
         self.jsonl_path = self.run_dir / "metrics.jsonl"
@@ -238,6 +257,18 @@ class LocalTrainingLogger:
                     continue
                 self.writer.add_scalar(_tensorboard_tag(key), value, step)
             self.writer.flush()
+
+        nonfinite = [
+            key
+            for key, value in row.items()
+            if key not in {"step", "time_seconds"} and not math.isfinite(value)
+        ]
+        if nonfinite and self.stop_on_nonfinite:
+            names = ", ".join(nonfinite)
+            raise FloatingPointError(
+                f"Non-finite SoundStream loss at step {step}: {names}. "
+                "Restart from a clean checkpoint or run with --allow-nonfinite-loss."
+            )
 
     def close(self) -> None:
         self.jsonl_handle.close()

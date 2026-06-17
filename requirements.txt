@@ -1,4 +1,5 @@
 numpy>=1.23
 torch>=2.0
+encodec>=0.1.1
 openai-whisper>=20231117
 pytest>=7.4

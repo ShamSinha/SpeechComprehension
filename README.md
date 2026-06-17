@@ -31,7 +31,8 @@ The repo now has two layers.
    - codec-latent editor: `z -> z'`
    - listener-proxy model to avoid the `z' = z` no-edit collapse
    - phoneme-conditioned editor scaffold
-   - EnCodec and SoundStream dependency paths
+   - EnCodec acoustic-token extraction path
+   - SoundStream kept as an optional later codec path
 
 The DSP edit bank is only a baseline. The intended research direction is the
 codec-latent editor in [docs/codec_latent_editor.md](docs/codec_latent_editor.md).
@@ -48,7 +49,7 @@ pip install -r requirements.txt
 Editable install with extras:
 
 ```bash
-pip install -e ".[dev,whisper,codec,soundstream]"
+pip install -e ".[dev,whisper,codec]"
 ```
 
 Codec options:
@@ -183,15 +184,15 @@ Useful knobs:
 
 ## Learned Codec-Latent Path
 
-The promising architecture is:
+The current learned path uses pretrained EnCodec acoustic tokens:
 
 ```text
 audio
--> codec encoder
--> latents z
+-> pretrained EnCodec encoder
+-> acoustic tokens z
 -> StreamingCodecLatentEditor
--> edited latents z'
--> codec decoder
+-> edited acoustic tokens z'
+-> EnCodec decoder
 -> edited audio
 ```
 
@@ -239,14 +240,42 @@ Architecture notes:
 
 ## Codec Backends
 
-EnCodec:
+Use EnCodec first:
 
 ```python
 from encodec import EncodecModel
 model = EncodecModel.encodec_model_24khz()
+model.set_target_bandwidth(6.0)
 ```
 
-SoundStream through `audiolm-pytorch`:
+Extract EnCodec acoustic tokens from a manifest:
+
+```bash
+.venv/bin/python -m speech_comprehension.extract_encodec_tokens \
+  manifests/common_voice_cv_valid_train_10_wav.csv \
+  --output-dir data/encodec_tokens/common_voice_cv_valid_train_10 \
+  --bandwidth 6.0
+```
+
+The extractor writes:
+
+```text
+data/encodec_tokens/.../tokens/*.pt
+data/encodec_tokens/.../index.csv
+data/encodec_tokens/.../metadata.json
+```
+
+For full validated Common Voice:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python -m speech_comprehension.extract_encodec_tokens \
+  manifests/common_voice_all_valid_mp3.csv \
+  --output-dir data/encodec_tokens/common_voice_all_valid \
+  --bandwidth 6.0 \
+  --device auto
+```
+
+SoundStream through `audiolm-pytorch` is optional/later:
 
 ```python
 from audiolm_pytorch import SoundStream
@@ -262,19 +291,18 @@ from audiolm_pytorch import SoundStream
 soundstream = SoundStream.init_and_load_from("runs/soundstream/soundstream.100000.pt")
 ```
 
-These packages are installed as optional dependencies. The actual codec dataset
-builder is the next implementation step:
+The actual editor training dataset is now:
 
 ```text
 manifest audio
--> codec latents z
+-> EnCodec acoustic tokens z
 -> ASR/listener confidence labels
 -> train listener proxy
 -> freeze listener proxy
 -> train latent editor
 ```
 
-## Train A SoundStream Codec
+## Optional: Train A SoundStream Codec
 
 SoundStream gives acoustic codec tokens: compact reconstructable audio tokens
 that preserve speaker, timing, prosody, and local pronunciation detail. A fresh
@@ -293,6 +321,7 @@ CUDA_VISIBLE_DEVICES=0 .venv/bin/python -m speech_comprehension.train_soundstrea
   --data-max-length-seconds 3 \
   --codebook-size 1024 \
   --rq-num-quantizers 8 \
+  --multi-spectral-recon-loss-weight 0 \
   --mixed-precision fp16 \
   --tensorboard
 ```
@@ -305,8 +334,15 @@ For a smaller smoke test:
   --results-folder runs/soundstream_smoke \
   --num-train-steps 20 \
   --batch-size 1 \
-  --data-max-length-seconds 1
+  --data-max-length-seconds 1 \
+  --multi-spectral-recon-loss-weight 0
 ```
+
+The wrapper defaults `--multi-spectral-recon-loss-weight` to `0`. The upstream
+`audiolm-pytorch` implementation computes `log(mel)` without an epsilon, so
+near-silent speech chunks can make that auxiliary loss `inf` or `nan`. Once the
+basic codec run is stable, try a small value such as `1e-6` or `1e-5` on a
+cleaned/non-silent dataset.
 
 To resume or fine-tune an existing SoundStream checkpoint:
 
@@ -337,18 +373,18 @@ This trains the codec only. The intelligibility-repair model still needs the
 next stages:
 
 ```text
-trained/frozen SoundStream
+pretrained EnCodec tokens
 -> acoustic tokens or latents z
 -> ASR confidence / WER labels
 -> listener proxy
 -> sparse latent editor
--> SoundStream decode
+-> EnCodec decode
 ```
 
 ## Acoustic vs Semantic Tokens
 
 For this project, acoustic tokens are required because they can be decoded back
-to audio. SoundStream tokens are acoustic tokens.
+to audio. EnCodec tokens are the default acoustic tokens now.
 
 Semantic tokens are still useful, but as conditioning or supervision. In
 `audiolm-pytorch`, semantic tokens usually come from:
@@ -365,7 +401,7 @@ semantic_tokenizer = HubertWithKmeans(
 
 They represent content/phonetic structure more than waveform detail. They can
 help the editor decide where a pronunciation is confusing, but they should not
-replace SoundStream for reconstruction. The safest MVP is not full AudioLM
+replace EnCodec for reconstruction. The safest MVP is not full AudioLM
 generation; it is sparse editing of original acoustic tokens, optionally
 conditioned on semantic tokens.
 
@@ -389,5 +425,5 @@ Remote:
 https://github.com/ShamSinha/SpeechComprehension.git
 ```
 
-Latest workflow includes the codec-latent editor, SoundStream optional
-dependency, full Common Voice manifests, and direct MP3 input support.
+Latest workflow uses pretrained EnCodec acoustic tokens, keeps SoundStream as
+optional/later, supports full Common Voice manifests, and reads MP3 directly.

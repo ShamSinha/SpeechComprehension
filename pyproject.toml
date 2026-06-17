@@ -26,6 +26,7 @@ speech-repair = "speech_comprehension.cli:main"
 speech-repair-experiment = "speech_comprehension.experiment:main"
 speech-build-manifest = "speech_comprehension.datasets:main"
 speech-convert-manifest-audio = "speech_comprehension.prepare_audio:main"
+speech-extract-encodec-tokens = "speech_comprehension.extract_encodec_tokens:main"
 speech-train-soundstream = "speech_comprehension.train_soundstream:main"
 
 [tool.setuptools.packages.find]
