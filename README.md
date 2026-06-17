@@ -50,6 +50,10 @@ clarity repairs such as presence-band boost, consonant edge emphasis, and
 gentle RMS lift. A learned phoneme/span repair model can replace this module
 without changing the objective or evaluation loop.
 
+The intended research direction is the learned phoneme-level editor described
+in [docs/phoneme_level_editor.md](docs/phoneme_level_editor.md). The DSP edit
+bank is a baseline, not the final speech editing approach.
+
 ## Install
 
 ```bash
